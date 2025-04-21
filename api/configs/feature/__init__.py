@@ -555,6 +555,16 @@ class AuthConfig(BaseSettings):
         default=None,
     )
 
+    GALAXY_CLIENT_ID: Optional[str] = Field(
+        description="GALAXY OAuth client ID",
+        default='test_client',
+    )
+
+    GALAXY_CLIENT_SECRET: Optional[str] = Field(
+        description="GALAXY OAuth client secret",
+        default='test_secret',
+    )
+
     ACCESS_TOKEN_EXPIRE_MINUTES: PositiveInt = Field(
         description="Expiration time for access tokens in minutes",
         default=60,
@@ -824,7 +834,7 @@ class PositionConfig(BaseSettings):
     def POSITION_TOOL_EXCLUDES_SET(self) -> set[str]:
         return {item.strip() for item in self.POSITION_TOOL_EXCLUDES.split(",") if item.strip() != ""}
 
-
+"""自动加载环境变量（.env）到 Python 配置类中，并加上类型校验和默认值。"""
 class LoginConfig(BaseSettings):
     ENABLE_EMAIL_CODE_LOGIN: bool = Field(
         description="whether to enable email code login",
@@ -836,7 +846,7 @@ class LoginConfig(BaseSettings):
     )
     ENABLE_SOCIAL_OAUTH_LOGIN: bool = Field(
         description="whether to enable github/google oauth login",
-        default=False,
+        default=True,
     )
     EMAIL_CODE_LOGIN_TOKEN_EXPIRY_MINUTES: PositiveInt = Field(
         description="expiry time in minutes for email code login token",
@@ -844,11 +854,11 @@ class LoginConfig(BaseSettings):
     )
     ALLOW_REGISTER: bool = Field(
         description="whether to enable register",
-        default=False,
+        default=True,
     )
     ALLOW_CREATE_WORKSPACE: bool = Field(
         description="whether to enable create workspace",
-        default=False,
+        default=True,
     )
 
 

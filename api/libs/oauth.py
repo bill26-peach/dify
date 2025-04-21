@@ -1,7 +1,7 @@
 import urllib.parse
 from dataclasses import dataclass
 from typing import Optional
-
+import base64
 import requests
 
 
@@ -34,6 +34,56 @@ class OAuth:
     def _transform_user_info(self, raw_info: dict) -> OAuthUserInfo:
         raise NotImplementedError()
 
+class GalaxyOAuth(OAuth):
+    _AUTH_URL = "http://localhost:8606/oauth/authorize"
+    _TOKEN_URL = "http://localhost:8606/oauth/token"
+    _USER_INFO_URL = "http://localhost:8630/user/info"
+
+    def get_authorization_url(self, invite_token: Optional[str] = None):
+        params = {
+            "response_type": 'code',
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": "read",  # Request only basic user information
+        }
+        if invite_token:
+            params["state"] = invite_token
+        return f"{self._AUTH_URL}?{urllib.parse.urlencode(params)}"
+
+    def get_access_token(self, code: str):
+        data = {
+            "code": code,
+            "redirect_uri": self.redirect_uri,
+            "grant_type": 'authorization_code',
+        }
+        auth_string = f"{self.client_id}:{self.client_secret}".encode("utf-8")
+        auth_b64 = base64.b64encode(auth_string).decode("utf-8")
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Basic {auth_b64}",
+        }
+        response = requests.post(self._TOKEN_URL, data=data, headers=headers)
+
+        response_json = response.json()
+        access_token = response_json.get("access_token")
+
+        if not access_token:
+            raise ValueError(f"Error in Galaxy OAuth: {response_json}")
+
+        return access_token
+
+    def get_raw_user_info(self, token: str):
+        headers = {"Authorization": f"Galaxy {token}"}
+        response = requests.get(self._USER_INFO_URL, headers=headers)
+        print(response.json())
+        return response.json()
+
+    def _transform_user_info(self, raw_info: dict) -> OAuthUserInfo:
+        userinfo = raw_info.get("data").get("data")
+        email = userinfo.get("email")
+        if not email:
+            email = f"{userinfo['userName']}@galaxy.com"
+        return OAuthUserInfo(id=str(userinfo["id"]+1), name=userinfo["realName"], email=email)
 
 class GitHubOAuth(OAuth):
     _AUTH_URL = "https://github.com/login/oauth/authorize"
