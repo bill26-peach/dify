@@ -565,6 +565,21 @@ class AuthConfig(BaseSettings):
         default='test_secret',
     )
 
+    GALAXY_AUTH_URL: Optional[str] = Field(
+        description="GALAXY OAuth AUTH_URL",
+        default='http://192.168.174.128:8606/oauth/authorize',
+    )
+
+    GALAXY_TOKEN_URL: Optional[str] = Field(
+        description="GALAXY OAuth TOKEN_URL",
+        default='http://192.168.174.128:8606/oauth/token',
+    )
+
+    GALAXY_USER_INFO_URL: Optional[str] = Field(
+        description="GALAXY OAuth USER_INFO_URL",
+        default='http://192.168.174.128:8630/user/info',
+    )
+
     ACCESS_TOKEN_EXPIRE_MINUTES: PositiveInt = Field(
         description="Expiration time for access tokens in minutes",
         default=60,
@@ -846,7 +861,7 @@ class LoginConfig(BaseSettings):
     )
     ENABLE_SOCIAL_OAUTH_LOGIN: bool = Field(
         description="whether to enable github/google oauth login",
-        default=True,
+        default=False,
     )
     EMAIL_CODE_LOGIN_TOKEN_EXPIRY_MINUTES: PositiveInt = Field(
         description="expiry time in minutes for email code login token",

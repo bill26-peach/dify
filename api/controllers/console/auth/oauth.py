@@ -14,7 +14,7 @@ from constants.languages import languages
 from events.tenant_event import tenant_was_created
 from extensions.ext_database import db
 from libs.helper import extract_remote_ip
-from libs.oauth import GitHubOAuth, GoogleOAuth, GalaxyOAuth, OAuthUserInfo
+from libs.oauth import GalaxyOAuth, GitHubOAuth, GoogleOAuth, OAuthUserInfo
 from models import Account
 from models.account import AccountStatus
 from services.account_service import AccountService, RegisterService, TenantService
@@ -43,14 +43,16 @@ def get_oauth_providers():
                 client_secret=dify_config.GOOGLE_CLIENT_SECRET,
                 redirect_uri=dify_config.CONSOLE_API_URL + "/console/api/oauth/authorize/google",
             )
-        if not dify_config.GALAXY_CLIENT_ID or not dify_config.GALAXY_CLIENT_SECRET:
-            galaxy_oauth = None
-        else:
-            galaxy_oauth = GalaxyOAuth(
-                client_id=dify_config.GALAXY_CLIENT_ID,
-                client_secret=dify_config.GALAXY_CLIENT_SECRET,
-                redirect_uri=dify_config.CONSOLE_API_URL + "/console/api/oauth/authorize/galaxy",
-            )
+
+        galaxy_oauth = GalaxyOAuth(
+            client_id=dify_config.GALAXY_CLIENT_ID,
+            client_secret=dify_config.GALAXY_CLIENT_SECRET,
+            redirect_uri=dify_config.CONSOLE_API_URL + "/console/api/oauth/authorize/galaxy",
+            auth_url=dify_config.GALAXY_AUTH_URL,
+            token_url=dify_config.GALAXY_TOKEN_URL,
+            user_info_url=dify_config.GALAXY_USER_INFO_URL
+
+        )
 
 
         OAUTH_PROVIDERS = {
@@ -59,6 +61,62 @@ def get_oauth_providers():
             "galaxy": galaxy_oauth,
         }
         return OAUTH_PROVIDERS
+
+class GalaxyOauthLogin(Resource):
+    def get(self, provider: str):
+        token = request.args.get("token") or None
+        if not token:
+            return {"error": "Invalid provider"}, 400
+        OAUTH_PROVIDERS = get_oauth_providers()
+        with current_app.app_context():
+            oauth_provider = OAUTH_PROVIDERS.get(provider)
+        if not oauth_provider:
+            return {"error": "Invalid provider"}, 400
+        try:
+            user_info = oauth_provider.get_user_info(token)
+        except requests.exceptions.RequestException as e:
+            error_text = e.response.text if e.response else str(e)
+            logging.exception(f"An error occurred during the OAuth process with {provider}: {error_text}")
+            return {"error": "OAuth process failed"}, 400
+        try:
+            account = _generate_account(provider, user_info)
+        except AccountNotFoundError:
+            return redirect(f"{dify_config.CONSOLE_WEB_URL}/signin?message=Account not found.")
+        except (WorkSpaceNotFoundError, WorkSpaceNotAllowedCreateError):
+            return redirect(
+                f"{dify_config.CONSOLE_WEB_URL}/signin"
+                "?message=Workspace not found, please contact system admin to invite you to join in a workspace."
+            )
+        except AccountRegisterError as e:
+            return redirect(f"{dify_config.CONSOLE_WEB_URL}/signin?message={e.description}")
+
+            # Check account status
+        if account.status == AccountStatus.BANNED.value:
+            return redirect(f"{dify_config.CONSOLE_WEB_URL}/signin?message=Account is banned.")
+
+        if account.status == AccountStatus.PENDING.value:
+            account.status = AccountStatus.ACTIVE.value
+            account.initialized_at = datetime.now(UTC).replace(tzinfo=None)
+            db.session.commit()
+
+        try:
+            TenantService.create_owner_tenant_if_not_exist(account)
+        except Unauthorized:
+            return redirect(f"{dify_config.CONSOLE_WEB_URL}/signin?message=Workspace not found.")
+        except WorkSpaceNotAllowedCreateError:
+            return redirect(
+                f"{dify_config.CONSOLE_WEB_URL}/signin"
+                "?message=Workspace not found, please contact system admin to invite you to join in a workspace."
+            )
+
+        token_pair = AccountService.login(
+            account=account,
+            ip_address=extract_remote_ip(request),
+        )
+
+        return redirect(
+            f"{dify_config.CONSOLE_WEB_URL}?access_token={token_pair.access_token}&refresh_token={token_pair.refresh_token}"
+        )
 
 
 class OAuthLogin(Resource):
@@ -146,6 +204,7 @@ class OAuthCallback(Resource):
         )
 
 
+
 def _get_account_by_openid_or_email(provider: str, user_info: OAuthUserInfo) -> Optional[Account]:
     account: Optional[Account] = Account.get_by_openid(provider, user_info.id)
 
@@ -196,3 +255,4 @@ def _generate_account(provider: str, user_info: OAuthUserInfo):
 
 api.add_resource(OAuthLogin, "/oauth/login/<provider>")
 api.add_resource(OAuthCallback, "/oauth/authorize/<provider>")
+api.add_resource(GalaxyOauthLogin, "/oauth/auth/login/<provider>")

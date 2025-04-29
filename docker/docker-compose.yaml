@@ -471,11 +471,19 @@ x-shared-env: &shared-api-worker-env
   OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-60000}
   OTEL_BATCH_EXPORT_TIMEOUT: ${OTEL_BATCH_EXPORT_TIMEOUT:-10000}
   OTEL_METRIC_EXPORT_TIMEOUT: ${OTEL_METRIC_EXPORT_TIMEOUT:-30000}
-
+  ALLOW_CREATE_WORKSPACE: true
+  ALLOW_REGISTER: true
+  ENABLE_SOCIAL_OAUTH_LOGIN: false
+  GALAXY_CLIENT_ID: test_client
+  GALAXY_CLIENT_SECRET: test_secret
+  GALAXY_AUTH_URL: http://192.168.174.128:8606/oauth/authorize
+  GALAXY_TOKEN_URL: http://192.168.174.128:8606/oauth/token
+  GALAXY_USER_INFO_URL: http://192.168.174.128:8630/user/info
 services:
   # API service
   api:
-    image: langgenius/dify-api:1.2.0
+    #image: langgenius/dify-api:1.2.0
+    image: bill73777/dify-api-custom:latest
     restart: always
     environment:
       # Use the shared environment variables.

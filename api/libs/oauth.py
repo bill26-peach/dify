@@ -1,7 +1,8 @@
+import base64
 import urllib.parse
 from dataclasses import dataclass
 from typing import Optional
-import base64
+
 import requests
 
 
@@ -13,10 +14,19 @@ class OAuthUserInfo:
 
 
 class OAuth:
-    def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
+    def __init__(self,
+                 client_id: str,
+                 client_secret: str,
+                 redirect_uri: str,
+                 auth_url: str,
+                 token_url: str,
+                 user_info_url: str):
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
+        self.auth_url = auth_url
+        self.token_url = token_url
+        self.user_info_url = user_info_url
 
     def get_authorization_url(self):
         raise NotImplementedError()
@@ -35,10 +45,6 @@ class OAuth:
         raise NotImplementedError()
 
 class GalaxyOAuth(OAuth):
-    _AUTH_URL = "http://localhost:8606/oauth/authorize"
-    _TOKEN_URL = "http://localhost:8606/oauth/token"
-    _USER_INFO_URL = "http://localhost:8630/user/info"
-
     def get_authorization_url(self, invite_token: Optional[str] = None):
         params = {
             "response_type": 'code',
@@ -48,7 +54,7 @@ class GalaxyOAuth(OAuth):
         }
         if invite_token:
             params["state"] = invite_token
-        return f"{self._AUTH_URL}?{urllib.parse.urlencode(params)}"
+        return f"{self.auth_url}?{urllib.parse.urlencode(params)}"
 
     def get_access_token(self, code: str):
         data = {
@@ -56,13 +62,16 @@ class GalaxyOAuth(OAuth):
             "redirect_uri": self.redirect_uri,
             "grant_type": 'authorization_code',
         }
-        auth_string = f"{self.client_id}:{self.client_secret}".encode("utf-8")
+        auth_string = f"{self.client_id}:{self.client_secret}".encode()
         auth_b64 = base64.b64encode(auth_string).decode("utf-8")
         headers = {
             "Accept": "application/json",
             "Authorization": f"Basic {auth_b64}",
         }
-        response = requests.post(self._TOKEN_URL, data=data, headers=headers)
+        print(self.client_id)
+        print(self.client_secret)
+        print(self.token_url)
+        response = requests.post(self.token_url, data=data, headers=headers)
 
         response_json = response.json()
         access_token = response_json.get("access_token")
@@ -74,7 +83,7 @@ class GalaxyOAuth(OAuth):
 
     def get_raw_user_info(self, token: str):
         headers = {"Authorization": f"Galaxy {token}"}
-        response = requests.get(self._USER_INFO_URL, headers=headers)
+        response = requests.get(self.user_info_url, headers=headers)
         print(response.json())
         return response.json()
 
